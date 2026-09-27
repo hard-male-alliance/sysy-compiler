@@ -1,0 +1,21 @@
+# Optimization implementation and evidence
+
+## Contract
+
+`optimize(module, level)` validates the input IR and the resulting IR. A nonempty error list prevents assembly publication; `-O0` is verification only. At `-O1`, the fixed order is unreachable-CFG removal, scalar mem2reg, sparse conditional constant propagation (SCCP), and dead-code elimination (DCE). `-O2` adds dominance-scoped common-subexpression elimination (CSE) and a final DCE. This is a fixed, transparent pass order, not an adaptive claim about globally optimal phase ordering.
+
+An optional `std::vector<PassStats>*` records function name, pass name, before/after block and instruction counts, and steady-clock nanoseconds. The normal null-pointer path does not read the clock or count instructions. The driver can attach these observations to run-level SQLite metrics without coupling optimization to the database or tracing implementation.
+
+The implementation uses `FunctionIR`'s stable value IDs and renumbers blocks only when removing unreachable blocks. Phi inputs are `(predecessor block, SSA value)` pairs. The verifier checks IDs, terminators, result types, Phi placement/edge sets, and defined uses. It is an internal-consistency gate, not a replacement for executable differential tests.
+
+## Promotion boundaries and semantics
+
+Scalar mem2reg identifies entry-block four-byte allocas whose addresses are used only as the address operand of direct loads and stores. It refuses escaped pointers, arrays, ambiguous element types, and paths with a potentially uninitialized load. The latter is conservative: SysY does not prescribe a value for an uninitialized local, but materializing an arbitrary zero in such a path would conceal a bug and could change debugging observations. A forward must-initialize analysis precedes conversion. The pass computes dominators and iterated dominance frontiers, inserts Phi nodes at definitions' convergence points, then renames loads/stores along the dominator tree. All other storage remains explicit memory; “complete mem2reg” means all eligible scalar allocas, not arbitrary aliased arrays or globals.
+
+SCCP tracks unknown, one exact 32-bit constant, or overdefined values and executable CFG edges. It folds integer arithmetic with explicit 32-bit wrapping and signed comparisons; division by zero and `INT_MIN / -1` remain nonconstant. It folds floating *comparisons* using IEEE-754 binary32 values, including unordered `!=`, but does not fold floating arithmetic or casts because host rounding-mode and target-conversion assumptions would otherwise need explicit validation. Dead branches are pruned and Phi edges synchronized with the resulting CFG. DCE roots stores, calls, terminators, and conservatively divisions/remainders that may trap. `-O2` CSE operates on identical pure expressions only when an existing value dominates the use; it never merges loads, stores, calls, or division/remainder. It does not use algebraic commutativity, preserving float NaN and signed-zero behavior.
+
+## Engineering trade-offs and future evidence
+
+The dominator builder uses [Cooper–Harvey–Kennedy's reverse-postorder iterative immediate-dominator method](https://hipersoft.cs.rice.edu/grads/publications/dom14.pdf), then materializes a quadratic-memory dominance query matrix for the verifier and optimization passes. This avoids the prior repeated dense-set intersection on long-tail CFGs, but the matrix and copied CSE environments remain scaling risks. Profile block count and pass time before changing those representations. The required next validation gate is real RISC-V execution of the same programs under `-O0/-O1/-O2`, covering diamonds, loops with `continue`/`break`, nested short circuit, arrays, calls with side effects, NaN/zero comparisons, and uninitialized-local nonpromotion. The IR verifier is necessary, but behavioral equivalence needs this independent check.
+
+LLVM's [pass catalog](https://llvm.org/docs/Passes.html#mem2reg-promote-memory-to-register) likewise separates promotable stack locations from general memory and lists SCCP and GVN as distinct passes. LLVM's [new pass manager](https://llvm.org/docs/NewPassManager.html) shows why preserving explicit, instrumentable pass boundaries is useful. These are design references, not claims that this small compiler matches LLVM's optimization coverage.

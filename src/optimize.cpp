@@ -220,13 +220,13 @@ rewrite_uses(FunctionIR& fn, const std::vector<ValueId>& replacement) {
     }
 }
 
-/** A slot is promoted only when its address never escapes and every load is definitely initialized.
- * / 只有地址不逃逸且每次加载必已初始化才提升栈槽。 */
+/** A slot is promotable when its address is used only by direct scalar loads/stores.
+ * Undefined incoming paths are represented explicitly by Undef during renaming.
+ * / 栈槽地址仅用于直接标量读写时即可提升；未初始化的流入路径在重命名时由 Undef 显式表示。 */
 bool
-promotable(const FunctionIR& fn, ValueId slot, const Blocks& pred) {
+promotable(const FunctionIR& fn, ValueId slot) {
     if (fn.value_types[slot] != IrType::Ptr)
         return false;
-    bool any = false;
     for (const auto& block : fn.blocks) {
         if (block.terminator.value == slot)
             return false;
@@ -236,49 +236,18 @@ promotable(const FunctionIR& fn, ValueId slot, const Blocks& pred) {
                     if (!((inst.op == IrOp::Load && i == 0 && inst.args.size() == 1)
                           || (inst.op == IrOp::Store && i == 0 && inst.args.size() == 2)))
                         return false;
-                    any = true;
                 }
             for (const auto& edge : inst.incoming)
                 if (edge.second == slot)
                     return false;
         }
     }
-    if (!any)
-        return true;
-    std::vector<bool> in(fn.blocks.size()), out(fn.blocks.size());
-    bool changed;
-    do {
-        changed = false;
-        for (BlockId b = 0; b < fn.blocks.size(); ++b) {
-            bool assigned = b != fn.entry && !pred[b].empty();
-            if (b != fn.entry)
-                for (auto p : pred[b])
-                    assigned = assigned && out[p];
-            const bool next_in = assigned;
-            for (const auto& inst : fn.blocks[b].instructions)
-                if (inst.op == IrOp::Store && inst.args.size() == 2 && inst.args[0] == slot)
-                    assigned = true;
-            if (in[b] != next_in || out[b] != assigned) {
-                in[b] = next_in;
-                out[b] = assigned;
-                changed = true;
-            }
-        }
-    } while (changed);
-    for (BlockId b = 0; b < fn.blocks.size(); ++b) {
-        bool assigned = in[b];
-        for (const auto& inst : fn.blocks[b].instructions) {
-            if (inst.op == IrOp::Load && inst.args.size() == 1 && inst.args[0] == slot && !assigned)
-                return false;
-            if (inst.op == IrOp::Store && inst.args.size() == 2 && inst.args[0] == slot)
-                assigned = true;
-        }
-    }
     return true;
 }
 
-/** Promote all nonescaping, definitely initialized 4-byte scalar allocas via iterated dominance
- * frontiers. / 经迭代支配边界提升所有不逃逸且必定初始化的 4 字节标量分配。 */
+/** Promote all nonescaping 4-byte scalar allocas via iterated dominance frontiers.
+ * Indeterminate paths retain a typed Undef definition, never an invented constant.
+ * / 经迭代支配边界提升所有不逃逸的 4 字节标量分配；未定路径保留带类型 Undef，绝不虚构常量。 */
 void
 mem2reg(FunctionIR& fn) {
     const auto succ = successors(fn);
@@ -289,7 +258,7 @@ mem2reg(FunctionIR& fn) {
         if (inst.op == IrOp::Alloca
             && inst.dst != no_value
             && inst.imm == 4
-            && promotable(fn, inst.dst, pred))
+            && promotable(fn, inst.dst))
             slots.push_back(inst.dst);
     std::vector<ValueId> replacement(fn.value_types.size(), no_value);
     for (const auto slot : slots) {
@@ -319,6 +288,16 @@ mem2reg(FunctionIR& fn) {
                 });
             continue;
         }
+        Instruction undef;
+        undef.op = IrOp::Undef;
+        undef.type = type;
+        undef.dst = fn.new_value(type);
+        const auto undef_id = undef.dst;
+        auto& entry_code = fn.blocks[fn.entry].instructions;
+        const auto first_non_phi = std::ranges::find_if(entry_code, [](const Instruction& i) {
+            return i.op != IrOp::Phi;
+        });
+        entry_code.insert(first_non_phi, std::move(undef));
         std::vector<BlockId> work;
         for (BlockId b = 0; b < defs.size(); ++b)
             if (defs[b])
@@ -351,8 +330,7 @@ mem2reg(FunctionIR& fn) {
                 auto& code = fn.blocks[b].instructions;
                 for (auto& inst : code) {
                     if (inst.op == IrOp::Load && inst.args.size() == 1 && inst.args[0] == slot) {
-                        if (!stack.empty())
-                            replacement[inst.dst] = stack.back();
+                        replacement[inst.dst] = stack.back();
                         inst.op = IrOp::Alloca;
                         inst.type = IrType::Void;
                         inst.dst = no_value;
@@ -370,7 +348,7 @@ mem2reg(FunctionIR& fn) {
                     }
                 }
                 for (const auto s : succ[b])
-                    if (phi[s] != no_value && !stack.empty())
+                    if (phi[s] != no_value)
                         for (auto& inst : fn.blocks[s].instructions)
                             if (inst.op == IrOp::Phi && inst.dst == phi[s]) {
                                 inst.incoming.emplace_back(b, stack.back());
@@ -379,7 +357,7 @@ mem2reg(FunctionIR& fn) {
                 for (const auto child : dom.children[b])
                     rename(child, stack);
             };
-        rename(fn.entry, {});
+        rename(fn.entry, {undef_id});
         for (auto& block : fn.blocks)
             std::erase_if(block.instructions, [](const Instruction& i) {
                 return i.op == IrOp::Alloca && i.dst == no_value && i.type == IrType::Void;
@@ -428,7 +406,8 @@ evaluate(
                 result = merge(result, values[value]);
         return result;
     }
-    if (inst.op == IrOp::Param
+    if (inst.op == IrOp::Undef
+        || inst.op == IrOp::Param
         || inst.op == IrOp::Load
         || inst.op == IrOp::Call
         || inst.op == IrOp::Alloca
@@ -577,6 +556,7 @@ sccp(FunctionIR& fn) {
                 && inst.op != IrOp::Phi
                 && inst.op != IrOp::ConstI32
                 && inst.op != IrOp::ConstF32
+                && inst.op != IrOp::Undef
                 && inst.op != IrOp::Load
                 && inst.op != IrOp::Call
                 && values[inst.dst].kind == K::Constant
@@ -788,6 +768,12 @@ verify_ir(const ModuleIR& module) {
                 case IrOp::ConstF32:
                     if (!arity(0) || inst.type != IrType::F32)
                         fail(b, "invalid f32 constant");
+                    break;
+                case IrOp::Undef:
+                    if (!arity(0)
+                        || !inst.incoming.empty()
+                        || (inst.type != IrType::I32 && inst.type != IrType::F32))
+                        fail(b, "invalid indeterminate value");
                     break;
                 case IrOp::Param:
                     if (!arity(0)

@@ -1,0 +1,10 @@
+int choose(int flag) {
+  int value;
+  if (flag) value = 7;
+  return value;
+}
+int main() {
+  putint(choose(1));
+  putch(10);
+  return 0;
+}

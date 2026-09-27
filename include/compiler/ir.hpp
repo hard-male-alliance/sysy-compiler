@@ -30,6 +30,7 @@ enum class CmpPred { Eq, Ne, Lt, Le, Gt, Ge };
 enum class IrOp {
     ConstI32,
     ConstF32,
+    Undef,
     Param,
     Alloca,
     GlobalAddr,
@@ -51,6 +52,9 @@ enum class IrOp {
 /**
  * One SSA definition or side effect. `args` are source-order operands; `imm` is
  * integer literal, float bits, parameter index, alloca byte size, or CmpPred.
+ * Undef defines an indeterminate i32/f32 value: it is never a constant and
+ * its backend home is deliberately not initialized. / Undef 定义未定的 i32/f32
+ * 值：绝不是常量，后端也刻意不初始化其驻留栈槽。
  * `aux` is alloca alignment. PtrAdd's offset is in BYTES. Phi uses incoming,
  * not args. / 一条 SSA 定义或副作用；args 按源码顺序排列；imm 存储整数、浮点位型、
  * 形参索引、分配字节数或比较谓词；aux 是分配对齐。PtrAdd 偏移以字节计。

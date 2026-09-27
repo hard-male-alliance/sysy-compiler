@@ -15,7 +15,7 @@ jobs:
         os: [ubuntu-24.04, macos-15]
         preset: [debug, release]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # 中文：显式安装开发头文件，避免依赖 runner 镜像的偶然预装内容。
       # English: Install development headers explicitly rather than relying on runner images.
       - name: Install SQLite and Ninja (Linux)
@@ -49,7 +49,7 @@ jobs:
       matrix:
         preset: [debug, release]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # 中文：MSYS2 同时提供一致的 GCC、Ninja、SQLite 及 Python 工具链。
       # English: MSYS2 supplies a coherent GCC, Ninja, SQLite, and Python toolchain.
       - uses: msys2/setup-msys2@v2
@@ -76,7 +76,7 @@ jobs:
     name: Linux ASan + UBSan
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # 中文：与 Linux E2E 相同的目标工具链，另对宿主编译器启用内存及未定义行为检测。
       # English: Keep the Linux E2E toolchain, adding host memory and undefined-behavior checks.
       - name: Install dependencies

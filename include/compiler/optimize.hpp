@@ -26,12 +26,13 @@ struct PassStats {
 
 /**
  * Verify and optimize a module without changing its externally visible behavior.
- * Level 0 verifies only; level 1 promotes definitely initialized scalar stack
- * slots and performs CFG/SCCP/DCE cleanup; level 2 also performs dominance-scoped
- * scalar common-subexpression elimination. Errors are internal IR diagnostics and
- * must prevent code emission. / 验证并优化模块，保持可观察行为。0 级只验证；1 级提升
- * 必定初始化的标量栈槽并清理 CFG、执行 SCCP 和 DCE；2 级进一步在支配域内消除
- * 标量公共子表达式。返回的错误是内部 IR 诊断，必须阻止代码生成。
+ * Level 0 verifies only. Level 1 promotes nonescaping scalar stack slots,
+ * retaining typed Undef for indeterminate paths, and runs CFG/SCCP/DCE cleanup.
+ * Level 2 also eliminates dominance-scoped scalar common subexpressions. Errors
+ * are internal IR diagnostics and must prevent code emission. / 验证并优化模块，保持
+ * 可观察行为。0 级只验证；1 级提升不逃逸的标量栈槽，用带类型 Undef 保留未定路径，
+ * 并清理 CFG、执行 SCCP 和 DCE；2 级进一步在支配域内消除标量公共子表达式。
+ * 返回的错误是内部 IR 诊断，必须阻止代码生成。
  *
  * Example / 示例：`if (auto errors = optimize(module, 2); !errors.empty()) ...;`
  */

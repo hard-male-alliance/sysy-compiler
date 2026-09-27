@@ -312,6 +312,9 @@ private:
         switch (ins.op) {
         case IrOp::Param:
         case IrOp::Phi:
+        case IrOp::Undef:
+            // 中文：未定值的驻留栈槽保持未初始化；不能伪造零或任何确定常量。
+            // English: Leave the indeterminate value's SSA home untouched; do not invent zero.
             break;
         case IrOp::ConstI32:
             out_ << "  li t0, " << static_cast<std::int32_t>(ins.imm) << '\n';

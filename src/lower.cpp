@@ -469,7 +469,7 @@ lower(const Program& program, const SemanticModel& model) {
         }
     }
     for (const auto& item : program.items) {
-        if (!item.function)
+        if (!item.function || !item.function->body)
             continue;
         const auto& source = *item.function;
         FunctionIR function;

@@ -76,8 +76,9 @@ struct Declaration {
     std::vector<Definition> definitions;
 };
 
-/** Array parameter has an omitted first dimension; dimensions holds only subsequent sizes. /
- * 数组形参首维省略，dimensions 只保存其余维度。 */
+/** Array parameter has an omitted first dimension; dimensions holds only subsequent sizes.
+ * A prototype may omit the name; a definition may not. /
+ * 数组形参首维省略，dimensions 只保存其余维度。原型可省略形参名，定义不可省略。 */
 struct Parameter {
     SourceRange range;
     BaseType type = BaseType::Int;
@@ -110,8 +111,8 @@ struct Statement {
     std::vector<BlockItem> items;
 };
 
-/** Function definition owns its body, which is a Block statement. / 函数定义拥有 Block
- * 语句形式的函数体。 */
+/** A null body denotes a prototype; a definition owns a Block statement. /
+ * 空 body 表示函数原型；函数定义拥有 Block 语句形式的函数体。 */
 struct Function {
     SourceRange range;
     BaseType return_type = BaseType::Void;

@@ -203,14 +203,20 @@ private:
         out.return_type = type;
         out.name = name.spelling;
         expect(TokenKind::LeftParen, "expected '('");
-        if (!is(TokenKind::RightParen)) {
+        if (is(TokenKind::KwVoid) && tokens_[index_ + 1].kind == TokenKind::RightParen) {
+            advance();
+        } else if (!is(TokenKind::RightParen)) {
             do {
                 out.parameters.push_back(parameter());
             } while (match(TokenKind::Comma));
         }
         expect(TokenKind::RightParen, "expected ')' after parameters");
-        out.body = block();
-        out.range = {begin, out.body->range.end};
+        if (match(TokenKind::Semicolon))
+            out.range = {begin, previous().range.end};
+        else {
+            out.body = block();
+            out.range = {begin, out.body->range.end};
+        }
         return out;
     }
 
@@ -219,7 +225,10 @@ private:
         const auto begin = current().range.begin;
         Parameter out;
         out.type = base_type(false);
-        out.name = expect(TokenKind::Identifier, "expected parameter name").spelling;
+        if (is(TokenKind::Identifier)) {
+            out.name = current().spelling;
+            advance();
+        }
         if (match(TokenKind::LeftBracket)) {
             out.is_array = true;
             expect(TokenKind::RightBracket, "array parameter's first dimension must be empty: []");

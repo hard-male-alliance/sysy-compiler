@@ -1,0 +1,3 @@
+int convert(float value);
+int convert(int value) { return value; }
+int main() { return convert(1); }

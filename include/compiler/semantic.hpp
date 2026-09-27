@@ -46,6 +46,9 @@ struct InitSlot {
 struct Symbol {
     std::string name;
     Type type;
+    /** First source declaration for conflict notes; builtins have an empty range. /
+     * 首次源码声明的位置，供冲突诊断提示；内建函数的范围为空。 */
+    SourceRange declaration_range;
     bool is_function = false;
     bool is_builtin = false;
     bool is_const = false;
@@ -55,6 +58,8 @@ struct Symbol {
     std::vector<InitSlot> initializer;
     const Definition* definition = nullptr;
     const Parameter* parameter = nullptr;
+    /** The unique definition, or null for a builtin or unresolved prototype. /
+     * 唯一定义；内建函数或尚未解析的原型为 null。 */
     const Function* function = nullptr;
 };
 

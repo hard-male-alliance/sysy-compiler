@@ -1,0 +1,7 @@
+int answer(void);
+int answer(void) { return 42; }
+int main() {
+  putint(answer());
+  putch(10);
+  return 0;
+}

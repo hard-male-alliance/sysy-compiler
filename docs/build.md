@@ -44,9 +44,11 @@ The first hosted run, [GitHub Actions run 36312669966](https://github.com/hard-m
 completed successfully on 2026-09-27: Ubuntu 24.04 Debug/Release, macOS 15
 Debug/Release, Windows MinGW Debug/Release, and Linux ASan+UBSan all passed their
 configure, build, and test steps (7/7 jobs). The run emitted only a deprecation
-annotation for `actions/checkout@v4`'s Node.js 20 runtime; the workflow now uses
-`actions/checkout@v5` (Node.js 24). This action update still needs a subsequent
-hosted run to validate it; it does not change the project build itself.
+annotation for `actions/checkout@v4`'s Node.js 20 runtime. The workflow now uses
+`actions/checkout@v5` (Node.js 24); the subsequent [branch run 36312860173](https://github.com/hard-male-alliance/sysy-compiler/actions/runs/36312860173)
+and [pull-request run 36313014554](https://github.com/hard-male-alliance/sysy-compiler/actions/runs/36313014554)
+both completed successfully with all 7/7 jobs. This is observed hosted evidence,
+not an inference from local builds.
 
 On macOS, Homebrew's SQLite may be keg-only. In that case configure with
 `-DCMAKE_PREFIX_PATH="$(brew --prefix sqlite)"`. On Windows, MSYS2 MINGW64 with the

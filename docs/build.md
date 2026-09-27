@@ -17,6 +17,31 @@ artifacts are under `.cache/build/<preset>/`; local experiments belong in `.temp
 These paths and `CMakeUserPresets.json` are ignored by Git. Override machine-specific
 settings in `CMakeUserPresets.json` rather than editing shared presets.
 
+For GNU/Linux RISC-V target-program execution, enable the matching static SysY
+runtime archive. This is opt-in so native Windows/macOS host builds remain free
+of cross-toolchain requirements:
+
+```sh
+cmake -S . -B .cache/build/wsl-runtime -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DSYSY_BUILD_RISCV_RUNTIME=ON
+cmake --build .cache/build/wsl-runtime --parallel
+ctest --test-dir .cache/build/wsl-runtime --output-on-failure
+```
+
+This requires `riscv64-linux-gnu-gcc` and `riscv64-linux-gnu-ar`; QEMU user mode
+is needed for E2E execution. CMake builds `sysy_runtime_riscv` as part of the
+normal build, placing the archive at
+`.cache/build/wsl-runtime/runtime/riscv64-linux-gnu/libsysy.a` and passing it to the
+conformance test. The test only executes target binaries if both that archive
+and target GCC/QEMU are available. With the option enabled, CTest names this
+test `sysy_conformance_target` and requires execution (`--execute on`), so
+missing target tools cause a failure rather than a false pass. Without the
+option, it is explicitly named `sysy_conformance_compile_only` and does not
+run target binaries. Both names match `ctest -R sysy_conformance`; configure
+prints which mode is active. Use a distinct WSL build directory rather than reusing a Windows preset
+directory in a shared checkout. See [runtime linking](architecture/runtime-linking.md) for a complete
+static link command, toolchain selection, and ABI rationale.
+
 On Linux with GCC or Clang, a separate opt-in build instruments the compiler and
 telemetry unit test with AddressSanitizer (ASan) and UndefinedBehaviorSanitizer
 (UBSan), without changing Debug or Release:
@@ -57,15 +82,22 @@ The GitHub Actions workflow exercises Debug and Release on Linux, macOS, and
 Windows and runs the same CTest suite on each platform. Linux additionally
 installs the RISC-V cross compiler and QEMU user emulator so the conformance
 suite can link and execute generated programs rather than only inspect assembly.
-The harness builds the supplied `libs/libsysy/sylib.c` with that same glibc-based
-cross compiler using `-fcommon`, then links its object with each generated program.
+When `SYSY_BUILD_RISCV_RUNTIME=ON`, CMake builds the supplied
+`libs/libsysy/sylib.c` with that same glibc-based cross compiler using
+`-fcommon`, packages it as a build-tree static archive, and passes that archive
+to the harness to link each generated program.
 It deliberately does **not** link `libsysy_riscv.a`: that supplied archive contains
 Newlib references such as `_impure_ptr` and is incompatible with Linux glibc.
 This is a runtime-library ABI distinction, not an alternate compiler output format.
 
 Conformance tests are registered with CTest when
 `tests/sysy_conformance.py` is present. The script receives `--compiler` with the
-absolute path to the built executable. Tests and experimental data must stay in
+absolute path to the built executable. When the runtime option is enabled it
+also receives `--runtime-archive` with the absolute path to the built archive.
+The current suite comprises `mem2reg_unit`, `telemetry_unit`, and one
+mode-specific conformance test (three CTest tests total). Historical 2/2
+results above predate the independent `mem2reg_unit` test and test-name split.
+Tests and experimental data must stay in
 this repository rather than external temporary directories.
 
 The `telemetry_unit` CTest target builds `tests/telemetry_test.cpp` with the same

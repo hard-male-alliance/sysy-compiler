@@ -7,6 +7,7 @@ Usage: python tests/sysy_conformance.py --compiler path/to/compiler [--execute a
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -19,7 +20,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES = ROOT / "tests" / "conformance"
 WORK = ROOT / ".temp" / "conformance"
-RUNTIME_SOURCE = ROOT / "libs" / "libsysy" / "sylib.c"
 
 # Expected stdout follows the provided SysY runtime library and language semantics.
 # 预期输出依据项目内 SysY 语言定义与运行时库，不由编译器输出反推。
@@ -47,6 +47,12 @@ VALID = {
     "recursive_array": ("10\n", ""),
     "negative_zero": ("1\n", ""),
     "float_io": ("0x1.8p+0\n", "0x1.8p0\n"),
+    "proto_forward": ("42\n", ""),
+    "proto_mutual": ("2\n", ""),
+    "proto_repeated": ("42\n", ""),
+    "proto_array": ("6\n", ""),
+    "proto_void_parameter": ("42\n", ""),
+    "mem2reg_defined_path": ("7\n", ""),
 }
 
 # SysY permits a local object to share a function name; the function call must
@@ -63,6 +69,11 @@ INVALID = (
     "bad_const_write",
     "bad_break",
     "bad_octal",
+    "bad_proto_mismatch",
+    "bad_proto_duplicate_def",
+    "bad_proto_missing_main",
+    "bad_proto_undefined",
+    "bad_proto_array_shape",
 )
 
 
@@ -107,6 +118,7 @@ def main() -> int:
     parser.add_argument("--compiler", required=True, type=Path)
     parser.add_argument("--execute", choices=("auto", "on", "off"), default="auto")
     parser.add_argument("--opt-levels", default="0,1,2", help="comma-separated compiler optimization levels")
+    parser.add_argument("--runtime-archive", type=Path, help="matching RISC-V GNU/Linux static runtime archive")
     args = parser.parse_args()
     levels = args.opt_levels.split(",")
     if not levels or any(level not in ("0", "1", "2") for level in levels):
@@ -119,23 +131,17 @@ def main() -> int:
 
     gcc = shutil.which("riscv64-linux-gnu-gcc")
     qemu = shutil.which("qemu-riscv64")
-    can_execute = bool(gcc and qemu and RUNTIME_SOURCE.is_file())
+    runtime_archive = args.runtime_archive.resolve() if args.runtime_archive else None
+    if runtime_archive is not None and not runtime_archive.is_file():
+        print(f"FAIL requested runtime archive not found: {runtime_archive}")
+        return 2
+    can_execute = bool(gcc and qemu and runtime_archive)
     if args.execute == "on" and not can_execute:
-        print("FAIL execution requested but RISC-V GCC, QEMU, or sylib.c is missing")
+        print("FAIL execution requested but RISC-V GCC, QEMU, or matching runtime archive is missing")
         return 2
     execute = args.execute == "on" or (args.execute == "auto" and can_execute)
     if not execute:
-        print("SKIP target execution: RISC-V GCC/QEMU/runtime unavailable or disabled; compile-only evidence follows")
-    else:
-        # The bundled RISC-V archive references Newlib `_impure_ptr` and does
-        # not link against Linux glibc. Build the same supplied runtime source
-        # with the selected cross-toolchain instead.
-        # 预编译 RISC-V 库依赖 Newlib；为 Linux glibc 交叉编译相同运行时源码。
-        runtime_object = WORK / "sylib-riscv.o"
-        runtime = run([gcc, "-fcommon", "-c", str(RUNTIME_SOURCE), "-o", str(runtime_object)])
-        if runtime.returncode:
-            print(f"FAIL build RISC-V runtime from source: {runtime.stderr.strip()}")
-            return 2
+        print("SKIP target execution: RISC-V GCC/QEMU/matching archive unavailable or disabled; compile-only evidence follows")
 
     failures = 0
     for level in levels:
@@ -154,7 +160,7 @@ def main() -> int:
             if not accepted or not execute:
                 continue
             executable = WORK / f"{name}-O{level}.elf"
-            link = run([gcc, "-static", str(output), str(runtime_object), "-o", str(executable)])
+            link = run([gcc, "-static", str(output), str(runtime_archive), "-o", str(executable)])
             linked = link.returncode == 0
             failures += not check(linked, f"link {label}", link.stderr.strip() if not linked else "")
             if not linked:
@@ -264,6 +270,51 @@ def main() -> int:
             failures += not check(False, "remote trace valid database", str(error))
     else:
         failures += not check(False, "remote trace SQLite file created")
+
+    error_db = WORK / "prototype-error.sqlite"
+    error_db.unlink(missing_ok=True)
+    bad, bad_output = compile_source(
+        compiler, "bad_proto_mismatch", ["--db", str(error_db), "--summary", "--color=never"]
+    )
+    failures += not check(
+        bad.returncode != 0 and bad.stdout == "" and not bad_output.exists()
+        and bool(re.search(r":\d+:\d+", bad.stderr)) and "^" in bad.stderr
+        and "summary" in bad.stderr.lower() and "\x1b[" not in bad.stderr,
+        "prototype semantic failure preserves diagnostic/summary streams",
+        f"exit={bad.returncode}, stderr={bad.stderr[:180]!r}",
+    )
+    if error_db.exists():
+        try:
+            with sqlite3.connect(error_db) as conn:
+                run_status = conn.execute("SELECT status FROM run").fetchall()
+                semantic_status = conn.execute("SELECT status FROM span WHERE name='semantic'").fetchall()
+                error_logs = conn.execute("SELECT message FROM log WHERE severity='error'").fetchall()
+            failures += not check(
+                run_status == [("error",)] and semantic_status == [("error",)] and bool(error_logs),
+                "prototype failure persisted as error run/span/log",
+                f"run={run_status}, semantic={semantic_status}, logs={error_logs[:2]}",
+            )
+        except sqlite3.DatabaseError as error:
+            failures += not check(False, "prototype failure SQLite valid", str(error))
+    else:
+        failures += not check(False, "prototype failure SQLite file created")
+
+    optimized_db = WORK / "optimized-run.sqlite"
+    optimized_db.unlink(missing_ok=True)
+    optimized, _ = compile_source(compiler, "mem2reg_defined_path", ["-O1", "--db", str(optimized_db)])
+    failures += not check(optimized.returncode == 0, "optimized telemetry invocation", optimized.stderr)
+    if optimized_db.exists():
+        try:
+            with sqlite3.connect(optimized_db) as conn:
+                pass_metrics = conn.execute(
+                    "SELECT attributes_json FROM metric WHERE name='compiler.pass.duration'"
+                ).fetchall()
+            has_mem2reg = any(json.loads(row[0]).get("pass") == "mem2reg" for row in pass_metrics)
+            failures += not check(has_mem2reg, "O1 mem2reg pass duration persisted", f"metrics={len(pass_metrics)}")
+        except (sqlite3.DatabaseError, ValueError) as error:
+            failures += not check(False, "optimized telemetry database valid", str(error))
+    else:
+        failures += not check(False, "optimized telemetry SQLite file created")
 
     # A database path that aliases source or assembly must be rejected before
     # opening either file; otherwise sqlite or output replacement destroys it.

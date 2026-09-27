@@ -1,6 +1,6 @@
 # SysY 2022 compiler
 
-A single C++23 `compiler` executable translates one SysY source file into **RISC-V RV64GC / LP64D GNU/Linux assembly**. It has a handwritten lexer/parser, semantic analysis, an internal SSA-capable IR, optimization levels `-O0` through `-O2`, source diagnostics, and optional SQLite observability. GitHub Actions is configured to build and test the host executable on Linux, macOS, and Windows; that matrix is not a claim that every runner result has already been observed. Generated assembly targets RISC-V GNU/Linux, not the host architecture.
+A single C++23 `compiler` executable translates one SysY source file into **RISC-V RV64GC / LP64D GNU/Linux assembly**. It has a handwritten lexer/parser, semantic analysis, an SSA-capable IR with scalar mem2reg, optimization levels `-O0` through `-O2`, source diagnostics, and optional SQLite observability. The language also supports compatible function prototypes for forward calls. GitHub Actions builds and tests the host executable on Linux, macOS, and Windows; generated assembly targets RISC-V GNU/Linux, not the host architecture.
 
 ## Build and run
 
@@ -13,18 +13,22 @@ ctest --preset release
 .cache/build/release/compiler input.sy -o output.s -O2
 ```
 
-On Windows, the executable may be named `compiler.exe`. `debug` is the other shared preset. Build and test artifacts stay under `.cache/`; repository-local experiments belong in `.temp/`.
+On Windows, the executable may be named `compiler.exe`. The shared presets are `debug`, `release`, and Linux-only `sanitizer`. Build and test artifacts stay under `.cache/`; repository-local experiments belong in `.temp/`.
 
-`compiler input.sy` defaults to `input.s`. `compiler - -o -` reads source from standard input and writes assembly to standard output. To link on a RISC-V GNU/Linux machine, or with a compatible cross-toolchain:
+`compiler input.sy` defaults to `input.s`. `compiler - -o -` reads source from standard input and writes assembly to standard output. For static target-program linking on a GNU/Linux RISC-V toolchain, build a matching runtime archive in an **isolated Linux/WSL build directory**:
 
 ```sh
+cmake -S . -B .cache/build/wsl-runtime -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug -DSYSY_BUILD_RISCV_RUNTIME=ON
+cmake --build .cache/build/wsl-runtime --parallel
 mkdir -p .temp
-riscv64-linux-gnu-gcc -fcommon -c libs/libsysy/sylib.c -o .temp/sylib.o
-riscv64-linux-gnu-gcc output.s .temp/sylib.o -o .temp/program
-qemu-riscv64 -L /usr/riscv64-linux-gnu .temp/program
+.cache/build/wsl-runtime/compiler tests/conformance/basic.sy -o .temp/basic.s
+riscv64-linux-gnu-gcc -static .temp/basic.s \
+  .cache/build/wsl-runtime/runtime/riscv64-linux-gnu/libsysy.a -o .temp/basic.elf
+qemu-riscv64 .temp/basic.elf
 ```
 
-The exact QEMU sysroot path depends on the cross-toolchain installation. The bundled `libsysy_riscv.a` is **Newlib-linked** and cannot be mixed with a glibc GNU/Linux target; compiling `sylib.c` with the same GNU/Linux toolchain avoids that ABI mismatch. Linux CI is configured for target execution with a RISC-V cross-compiler and QEMU. macOS and Windows CI jobs are configured for host-side build and tests; they do not imply native target execution or an already-observed passing result.
+The bundled `libsysy_riscv.a` is **Newlib-linked** and cannot be mixed with a glibc GNU/Linux target. The opt-in CMake target builds `libsysy.a` from the supplied `sylib.c` using the same GNU/Linux RISC-V toolchain, without changing the compiler binary or the vendor archive. Linux CI executes target programs with this archive; macOS and Windows run host-side compiler tests. See the [runtime-linking decision](docs/architecture/runtime-linking.md) for ABI evidence and limitations.
 
 ## Interface and scope
 
@@ -35,4 +39,4 @@ The exact QEMU sysroot path depends on the cross-toolchain installation. The bun
 
 `--help`, diagnostics, and `--summary` use standard error; only explicitly requested assembly uses standard output. Automatic color is limited to capable terminals, with `--color=always|never|auto` available for control. `--db PATH` persists machine-readable runs, spans, events, metrics, and logs in SQLite; without it, compilation does not open a telemetry database. See the CLI reference for exit codes and trace propagation.
 
-This repository implements the language documented in `docs/task`, with explicit boundaries such as no user function prototypes and no optional `putf` extension. It is not a general C compiler. In particular, treat benchmark and optimization claims as workload-dependent; the [optimization note](docs/architecture/optimization.md) records implemented passes and validation limits.
+This repository implements the language documented in `docs/task`, plus self-contained function prototypes as a documented extension. `putf` remains optional and unimplemented. It is not a general C compiler. In particular, treat benchmark and optimization claims as workload-dependent; the [optimization note](docs/architecture/optimization.md) records implemented passes and validation limits.

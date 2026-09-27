@@ -20,8 +20,8 @@ jobs:
       # English: Install development headers explicitly rather than relying on runner images.
       - name: Install SQLite and Ninja (Linux)
         if: runner.os == 'Linux'
-        # 中文：测试用 Linux RISC-V 工具链从 sylib.c 重建运行时；预制归档依赖 Newlib。
-        # English: Tests rebuild sylib.c with glibc RISC-V tools; the bundled archive needs Newlib.
+        # 中文：安装 GNU/Linux RISC-V 工具链，以构建匹配 glibc 的运行时归档并执行端到端测试。
+        # English: Install GNU/Linux RISC-V tools for a glibc-matched runtime archive and E2E execution.
         run: |
           sudo apt-get update
           sudo apt-get install -y libsqlite3-dev ninja-build gcc-riscv64-linux-gnu qemu-user
@@ -34,7 +34,7 @@ jobs:
           if [[ "$RUNNER_OS" == "macOS" ]]; then
             cmake --preset "${{ matrix.preset }}" -DCMAKE_PREFIX_PATH="$(brew --prefix sqlite)"
           else
-            cmake --preset "${{ matrix.preset }}"
+            cmake --preset "${{ matrix.preset }}" -DSYSY_BUILD_RISCV_RUNTIME=ON
           fi
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }} --parallel
@@ -84,7 +84,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libsqlite3-dev ninja-build gcc-riscv64-linux-gnu qemu-user
       - name: Configure
-        run: cmake --preset sanitizer
+        run: cmake --preset sanitizer -DSYSY_BUILD_RISCV_RUNTIME=ON
       - name: Build
         run: cmake --build --preset sanitizer --parallel
       - name: Test

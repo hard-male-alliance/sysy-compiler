@@ -8,7 +8,8 @@
 
 namespace sysy {
 
-/** Source coordinates are one-based; offsets are zero-based byte positions. / 源坐标行列从一开始，偏移是从零开始的字节位置。 */
+/** Source coordinates are one-based; offsets are zero-based byte positions. /
+ * 源坐标行列从一开始，偏移是从零开始的字节位置。 */
 struct SourcePosition {
     std::size_t offset = 0;
     std::size_t line = 1;
@@ -30,13 +31,15 @@ struct FrontendError {
 /** SysY scalar base types. / SysY 标量基础类型。 */
 enum class BaseType { Int, Float, Void };
 
-/** Expression shape; children are ordered operands, subscripts, or call arguments. / 表达式形态；children 依次为运算项、下标或调用实参。 */
+/** Expression shape; children are ordered operands, subscripts, or call arguments. /
+ * 表达式形态；children 依次为运算项、下标或调用实参。 */
 enum class ExprKind { Integer, Float, String, Variable, Call, Unary, Binary };
 
 struct Expr;
 using ExprPtr = std::shared_ptr<Expr>;
 
-/** Expression syntax tree; text preserves literal spelling, identifier, or operator. / 表达式语法树；text 保留字面值、标识符或运算符的原始拼写。 */
+/** Expression syntax tree; text preserves literal spelling, identifier, or operator. /
+ * 表达式语法树；text 保留字面值、标识符或运算符的原始拼写。 */
 struct Expr {
     ExprKind kind = ExprKind::Integer;
     SourceRange range;
@@ -44,13 +47,17 @@ struct Expr {
     std::vector<ExprPtr> children;
 };
 
-/** Recursive initializer; scalar holds expr, aggregate holds elements. / 递归初值；标量保存 expr，聚合初值保存 elements。 */
+/** Recursive initializer; scalar holds expr, aggregate holds elements. / 递归初值；标量保存
+ * expr，聚合初值保存 elements。 */
 struct Initializer {
     SourceRange range;
     ExprPtr expr;
     std::vector<Initializer> elements;
 
-    [[nodiscard]] bool is_aggregate() const { return !expr; }
+    [[nodiscard]] bool
+    is_aggregate() const {
+        return !expr;
+    }
 };
 
 /** One declared object, with dimensions in source order. / 单个声明对象，维度按源码顺序排列。 */
@@ -69,7 +76,8 @@ struct Declaration {
     std::vector<Definition> definitions;
 };
 
-/** Array parameter has an omitted first dimension; dimensions holds only subsequent sizes. / 数组形参首维省略，dimensions 只保存其余维度。 */
+/** Array parameter has an omitted first dimension; dimensions holds only subsequent sizes. /
+ * 数组形参首维省略，dimensions 只保存其余维度。 */
 struct Parameter {
     SourceRange range;
     BaseType type = BaseType::Int;
@@ -90,7 +98,8 @@ struct BlockItem {
     StmtPtr statement;
 };
 
-/** Statement fields: expr is condition/value, target assignment LVal, first/second are branches or loop body. / 语句字段：expr 为条件或值，target 为赋值左值，first/second 为分支或循环体。 */
+/** Statement fields: expr is condition/value, target assignment LVal, first/second are branches or
+ * loop body. / 语句字段：expr 为条件或值，target 为赋值左值，first/second 为分支或循环体。 */
 struct Statement {
     StmtKind kind = StmtKind::Block;
     SourceRange range;
@@ -101,7 +110,8 @@ struct Statement {
     std::vector<BlockItem> items;
 };
 
-/** Function definition owns its body, which is a Block statement. / 函数定义拥有 Block 语句形式的函数体。 */
+/** Function definition owns its body, which is a Block statement. / 函数定义拥有 Block
+ * 语句形式的函数体。 */
 struct Function {
     SourceRange range;
     BaseType return_type = BaseType::Void;
@@ -110,7 +120,8 @@ struct Function {
     StmtPtr body;
 };
 
-/** Top-level item stores exactly one declaration or function in source order. / 顶层项依源码次序只保存声明或函数之一。 */
+/** Top-level item stores exactly one declaration or function in source order. /
+ * 顶层项依源码次序只保存声明或函数之一。 */
 struct TopLevel {
     SourceRange range;
     std::optional<Declaration> declaration;

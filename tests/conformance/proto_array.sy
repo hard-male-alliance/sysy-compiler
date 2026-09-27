@@ -1,0 +1,10 @@
+int pick(int [][3], int);
+int pick(int values[][3], int row) {
+  return values[row][2];
+}
+int main() {
+  int values[2][3] = {{1,2,3},{4,5,6}};
+  putint(pick(values, 1));
+  putch(10);
+  return 0;
+}

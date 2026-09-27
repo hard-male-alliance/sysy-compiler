@@ -1,0 +1,2 @@
+int missing(int value);
+int main() { return missing(1); }

@@ -26,12 +26,20 @@ public:
             if (item.function)
                 function(*item.function);
         }
+        for (const auto& symbol : result_.model.symbols) {
+            if (symbol.is_function && !symbol.is_builtin && !symbol.function)
+                error(
+                    symbol.declaration_range,
+                    "function '" + symbol.name + "' declared but not defined"
+                );
+        }
         const auto it = scopes_.front().find("main");
         if (it == scopes_.front().end()
             || !it->second->is_function
             || it->second->type.base != BaseType::Int
             || !it->second->parameters.empty()
-            || it->second->is_builtin) {
+            || it->second->is_builtin
+            || !it->second->function) {
             error({}, "program requires exactly one int main() definition");
         }
         return std::move(result_);
@@ -48,6 +56,17 @@ private:
         result_.errors.push_back({range, std::move(message)});
     }
 
+    /** Keep the primary range on the offending declaration and point to its predecessor. /
+     * 主范围标注冲突声明，并在消息中指出前次声明的位置。 */
+    static std::string
+    previous_at(SourceRange range) {
+        return " (previous declaration at "
+               + std::to_string(range.begin.line)
+               + ":"
+               + std::to_string(range.begin.column)
+               + ")";
+    }
+
     Symbol*
     add(std::string name, Type type, SourceRange range, bool builtin = false) {
         auto& scope = scopes_.back();
@@ -59,6 +78,7 @@ private:
         auto* symbol = &result_.model.symbols.back();
         symbol->name = std::move(name);
         symbol->type = std::move(type);
+        symbol->declaration_range = range;
         symbol->is_global = scopes_.size() == 1;
         symbol->is_builtin = builtin;
         scope.emplace(symbol->name, symbol);
@@ -663,14 +683,15 @@ private:
 
     void
     function(const Function& func) {
-        auto* symbol = add(func.name, {func.return_type, {}}, func.range);
-        if (!symbol)
-            return;
-        symbol->is_function = true;
-        symbol->function = &func;
-        result_.model.functions[&func] = symbol;
-        current_function_ = &func;
+        const SourceRange header{
+            func.range.begin,
+            func.body ? func.body->range.begin : func.range.end
+        };
+        // Resolve bounds in parameter scope, so earlier names shadow global constants.
+        // 在形参作用域解析维度，确保先前的形参名能遮蔽全局常量。
         scopes_.emplace_back();
+        std::vector<Type> signature;
+        std::vector<Symbol*> parameter_objects;
         for (const auto& param : func.parameters) {
             Type type{param.type, {}};
             if (param.is_array) {
@@ -680,15 +701,73 @@ private:
                 if (!extent(type, true))
                     error(param.range, "array parameter dimensions exceed supported stride range");
             }
-            symbol->parameters.push_back(type);
+            signature.push_back(type);
+            if (param.name.empty()) {
+                if (func.body)
+                    error(param.range, "function definition requires a name for every parameter");
+                continue;
+            }
             auto* object = add(param.name, type, param.range);
-            if (object) {
+            if (object && func.body) {
                 object->parameter = &param;
                 result_.model.parameters[&param] = object;
+                parameter_objects.push_back(object);
             }
         }
-        if (func.body)
-            statement(*func.body, true);
+        scopes_.pop_back();
+
+        auto& global = scopes_.front();
+        Symbol* symbol = nullptr;
+        if (const auto found = global.find(func.name); found != global.end()) {
+            symbol = found->second;
+            if (!symbol->is_function
+                || symbol->type.base != func.return_type
+                || symbol->parameters.size() != signature.size()
+                || !std::equal(
+                    signature.begin(),
+                    signature.end(),
+                    symbol->parameters.begin(),
+                    [](const Type& a, const Type& b) {
+                        return a.base == b.base && a.dimensions == b.dimensions;
+                    }
+                )) {
+                error(
+                    header,
+                    "conflicting declaration of function '"
+                        + func.name
+                        + "'"
+                        + (symbol->is_builtin ? "" : previous_at(symbol->declaration_range))
+                );
+                return;
+            }
+            if (func.body && (symbol->function || symbol->is_builtin)) {
+                error(
+                    header,
+                    "duplicate definition of function '"
+                        + func.name
+                        + "'"
+                        + (symbol->is_builtin ? ""
+                                              : previous_at(
+                                                    symbol->function ? symbol->function->range
+                                                                     : symbol->declaration_range
+                                                ))
+                );
+                return;
+            }
+        } else {
+            symbol = add(func.name, {func.return_type, {}}, header);
+            symbol->is_function = true;
+            symbol->parameters = std::move(signature);
+        }
+        result_.model.functions[&func] = symbol;
+        if (!func.body)
+            return;
+        symbol->function = &func;
+        current_function_ = &func;
+        scopes_.emplace_back();
+        for (auto* object : parameter_objects)
+            scopes_.back().emplace(object->name, object);
+        statement(*func.body, true);
         scopes_.pop_back();
         current_function_ = nullptr;
     }

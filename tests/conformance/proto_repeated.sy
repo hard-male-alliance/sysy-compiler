@@ -1,0 +1,8 @@
+int increment(int);
+int increment(int value);
+int increment(int value) { return value + 1; }
+int main() {
+  putint(increment(41));
+  putch(10);
+  return 0;
+}

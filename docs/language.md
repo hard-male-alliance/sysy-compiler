@@ -30,8 +30,8 @@ Declaration   = [ "const" ] BaseType Definition { "," Definition } ";" ;
 BaseType      = "int" | "float" ;
 Definition    = Identifier { "[" Expr "]" } [ "=" Initializer ] ;
 Initializer   = Expr | "{" [ Initializer { "," Initializer } ] "}" ;
-Function      = ( BaseType | "void" ) Identifier "(" [ Parameter { "," Parameter } ] ")" Block ;
-Parameter     = BaseType Identifier [ "[" "]" { "[" Expr "]" } ] ;
+Function      = ( BaseType | "void" ) Identifier "(" ( "void" | [ Parameter { "," Parameter } ] ) ")" ( ";" | Block ) ;
+Parameter     = BaseType [ Identifier ] [ "[" "]" { "[" Expr "]" } ] ;
 Block         = "{" { Declaration | Statement } "}" ;
 Statement     = Variable "=" Expr ";" | [ Expr ] ";" | Block
               | "if" "(" Expr ")" Statement [ "else" Statement ]
@@ -51,16 +51,16 @@ Call          = Identifier "(" [ Expr { "," Expr } ] ")" ;
 Number        = Integer | Float ;
 ```
 
-`Variable = Expr` is *not* a general assignment expression: assignment is a statement and its left side must parse as a variable/array element. The parser accepts an `Expr` syntactically in an array bound or initializer; semantic analysis requires constant `int` array dimensions and compile-time values for constants and global initializers. The first bound of an array parameter is omitted (`[]`), while all trailing bounds must be constant. `else` binds to the nearest unmatched `if`. The grammar lists `String` to describe parsing, but no source program using a string expression passes current semantics.
+`Variable = Expr` is *not* a general assignment expression: assignment is a statement and its left side must parse as a variable/array element. The parser accepts an `Expr` syntactically in an array bound or initializer; semantic analysis requires constant `int` array dimensions and compile-time values for constants and global initializers. The first bound of an array parameter is omitted (`[]`), while all trailing bounds must be constant. Parameter names may be omitted only in a prototype, not a definition. `f(void)` and `f()` are equivalent no-argument spellings. A semicolon terminates a prototype; a block supplies the definition. `else` binds to the nearest unmatched `if`. The grammar lists `String` to describe parsing, but no source program using a string expression passes current semantics.
 
 ## Semantic boundaries
 
 | Feature | Current behavior |
 | --- | --- |
-| Entry point and source order | Exactly one `int main()` with no parameters. Definitions come into scope at their source position. Self-recursion works; calls to later user functions do not, because prototypes are not part of this grammar. |
+| Entry point and source order | Exactly one `int main()` definition with no parameters. Compatible prototypes may repeat, and one matching definition is required by the end of the single translation unit, except for runtime builtins. A prototype makes a later definition callable before its body appears; without a prototype, forward calls remain invalid. Conflicting signatures, duplicate definitions, and unresolved user prototypes are errors. Self-recursion works. |
 | Types and arrays | Signed 32-bit `int`, binary32 `float`, `void` function result; row-major multidimensional arrays. Scalar `int`/`float` conversions are implicit. Array arguments match element type, rank, and trailing extents. Zero-length dimensions are accepted: the array has **zero logical elements**, although code generation reserves one physical 32-bit backing word so it has a representable address. Access to any element of a zero-extent array is out of bounds and has no defined result. Arrays exceeding the implementation's shape limit are rejected. |
 | Constants and initialization | `const` needs an initializer. Compile-time constants may be used as dimensions. Global objects without explicit initializers are zero-filled; uninitialized locals are not promised zero. Braced array initializers align nested groups to subarray boundaries and zero-fill omitted elements. If an array has zero logical elements, only `{}` is accepted as an explicit initializer; it creates no element values. |
 | Operations/control | C-like arithmetic/comparisons; `%` requires integer operands. `&&` and `||` short-circuit. `break`/`continue` require an enclosing `while`. A non-void function that falls through has an undefined result per the task document, not a compiler-invented value. |
 | Runtime calls | Builtins include `getint`, `getch`, `getfloat`, `getarray`, `getfarray`, `putint`, `putch`, `putfloat`, `putarray`, `putfarray`, `starttime`, and `stoptime`. Timer calls lower to `_sysy_starttime(line)` / `_sysy_stoptime(line)`. `putf` is not implemented. |
 
-This is not C: there are no `for` loops, `switch`, structs, pointers in source syntax, casts, general function declarations, or increment/decrement operators. The task document mentions a “tensor type” in its coursework checklist but supplies no independent syntax or semantics beyond multidimensional arrays; this compiler implements the specified arrays, not an invented tensor dialect. For deeper rationale and unresolved specification ambiguities, see the [task contract analysis](architecture/sysy2022-contract.md) and [semantic model](architecture/semantic-model.md).
+This is not C: there are no `for` loops, `switch`, structs, pointers in source syntax, casts, object `extern` declarations, or increment/decrement operators. Function prototypes are the sole standalone declaration extension beyond the base SysY grammar. The task document mentions a “tensor type” in its coursework checklist but supplies no independent syntax or semantics beyond multidimensional arrays; this compiler implements the specified arrays, not an invented tensor dialect. For deeper rationale and unresolved specification ambiguities, see the [task contract analysis](architecture/sysy2022-contract.md) and [semantic model](architecture/semantic-model.md).

@@ -1,0 +1,4 @@
+int calculate(int value);
+int calculate(int value) { return value; }
+int calculate(int value) { return value + 1; }
+int main() { return calculate(1); }

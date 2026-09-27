@@ -1,0 +1,8 @@
+int main() {
+  int smallest = -2147483648;
+  float hex = 0x1.8p1;
+  if (smallest < 0 && hex == 3.0) putint(1);
+  else putint(0);
+  putch(10);
+  return 0;
+}

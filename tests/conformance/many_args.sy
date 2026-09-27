@@ -1,0 +1,8 @@
+int weighted(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) {
+  return a + 2*b + 3*c + 4*d + 5*e + 6*f + 7*g + 8*h + 9*i + 10*j;
+}
+int main() {
+  putint(weighted(1, 1, 1, 1, 1, 1, 1, 1, 1, 1));
+  putch(10);
+  return 0;
+}

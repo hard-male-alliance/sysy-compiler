@@ -1,0 +1,9 @@
+int main() {
+  int result = 0;
+  if (1)
+    if (0) result = 1;
+    else result = 2;
+  putint(result);
+  putch(10);
+  return 0;
+}

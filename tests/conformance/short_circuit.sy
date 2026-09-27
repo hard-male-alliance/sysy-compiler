@@ -1,0 +1,14 @@
+int calls = 0;
+int hit() {
+  calls = calls + 1;
+  return 1;
+}
+int main() {
+  if (0 && hit()) calls = calls + 100;
+  if (1 || hit()) calls = calls + 10;
+  if (1 && hit()) calls = calls + 20;
+  if (0 || hit()) calls = calls + 30;
+  putint(calls);
+  putch(10);
+  return 0;
+}

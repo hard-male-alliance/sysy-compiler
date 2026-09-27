@@ -1,0 +1,7 @@
+int main() {
+  const int a = 0x10;
+  int b = 010;
+  putint(a + b * 2 - 4 / 2);
+  putch(10);
+  return 0;
+}

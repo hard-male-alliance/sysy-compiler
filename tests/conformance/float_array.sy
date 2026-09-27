@@ -1,0 +1,16 @@
+float sum(float a[], int n) {
+  int i = 0;
+  float s = 0.0;
+  while (i < n) {
+    s = s + a[i];
+    i = i + 1;
+  }
+  return s;
+}
+int main() {
+  float a[3] = {1.0, 2.5, 3.5};
+  if (sum(a, 3) == 7.0) putint(1);
+  else putint(0);
+  putch(10);
+  return 0;
+}

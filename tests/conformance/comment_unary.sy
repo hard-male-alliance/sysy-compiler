@@ -1,0 +1,8 @@
+int main() {
+  // A line comment must end at the newline.
+  int a = ++5;
+  /* The first close ends this comment. */
+  putint(a + !a);
+  putch(10);
+  return 0;
+}

@@ -1,0 +1,10 @@
+int sum(int a[], int n) {
+  if (n == 0) return 0;
+  return a[n - 1] + sum(a, n - 1);
+}
+int main() {
+  int a[4] = {1, 2, 3, 4};
+  putint(sum(a, 4));
+  putch(10);
+  return 0;
+}

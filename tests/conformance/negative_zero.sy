@@ -1,0 +1,7 @@
+int main() {
+  float z = -0.0;
+  if (z == 0.0 && !(z < 0.0)) putint(1);
+  else putint(0);
+  putch(10);
+  return 0;
+}

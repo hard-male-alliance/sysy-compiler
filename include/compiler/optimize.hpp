@@ -35,7 +35,7 @@ struct PassStats {
  *
  * Example / 示例：`if (auto errors = optimize(module, 2); !errors.empty()) ...;`
  */
-[[nodiscard]] std::vector<std::string> optimize(ModuleIR& module, int level,
-                                                std::vector<PassStats>* stats = nullptr);
+[[nodiscard]] std::vector<std::string>
+optimize(ModuleIR& module, int level, std::vector<PassStats>* stats = nullptr);
 
 } // namespace sysy

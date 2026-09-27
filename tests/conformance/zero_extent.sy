@@ -1,0 +1,7 @@
+int global_empty[0] = {};
+int main() {
+  int local_empty[0] = {};
+  putint(1);
+  putch(10);
+  return 0;
+}

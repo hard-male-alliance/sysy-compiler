@@ -1,0 +1,12 @@
+float mix(int a, float b, int c, float d, int e, float f, int g, float h,
+          int i, float j, int k, float l, int m, float n, int o, float p,
+          int q, float r, int s, float t) {
+  return a+b+c+d+e+f+g+h+i+j+k+l+m+n+o+p+q+r+s+t;
+}
+int main() {
+  if (mix(1,0.5,1,0.5,1,0.5,1,0.5,1,0.5,
+          1,0.5,1,0.5,1,0.5,1,0.5,1,0.5) == 15.0) putint(1);
+  else putint(0);
+  putch(10);
+  return 0;
+}

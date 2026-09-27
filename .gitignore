@@ -1,0 +1,10 @@
+# 中文：本地构建、测试与实验产物；English: Local build, test, and experiment artifacts.
+.cache/
+.temp/
+build/
+CMakeUserPresets.json
+# 中文：编辑器配置和 Python 字节码是本机生成物，不属于交付源代码。
+# English: IDE settings and Python bytecode are machine-local artifacts, not deliverable sources.
+.idea/
+__pycache__/
+*.pyc

@@ -1,0 +1,8 @@
+int main() {
+  float a = 1.5;
+  float b = 2;
+  if (a + b == 3.5) putint(1);
+  else putint(0);
+  putch(10);
+  return 0;
+}
